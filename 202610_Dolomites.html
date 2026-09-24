@@ -107,6 +107,17 @@
         return `${pageName}/index.html`;
       }
 
+      function getRequestOptions() {
+        return {
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28"
+          },
+          cache: "no-store"
+        };
+      }
+
       async function loadVacationPlan() {
         if (!token) {
           showError(
@@ -123,29 +134,46 @@
           return;
         }
 
-        const endpoint = new URL(
-          `https://api.github.com/repos/${repositoryOwner}/${repositoryName}/contents/${repositoryPath}`
-        );
+        const repositoryEndpoint =
+          `https://api.github.com/repos/${repositoryOwner}/${repositoryName}`;
 
-        let response;
+        let repositoryResponse;
         try {
-          response = await fetch(endpoint, {
-            headers: {
-              Accept: "application/vnd.github.raw+json",
-              Authorization: `Bearer ${token}`,
-              "X-GitHub-Api-Version": "2022-11-28"
-            },
-            cache: "no-store"
-          });
+          repositoryResponse = await fetch(repositoryEndpoint, getRequestOptions());
         } catch (error) {
           showError(`GitHub could not be reached: ${error.message}`);
           return;
         }
 
-        if (!response.ok) {
+        if (!repositoryResponse.ok) {
           const messages = {
             401: "GitHub rejected the token. Check that it is valid.",
-            403: "The token is not allowed to read this repository, or its API limit was reached.",
+            403: "The token is not allowed to use the GitHub API, or its API limit was reached.",
+            404: `The token cannot access ${repositoryOwner}/${repositoryName}. For a fine-grained PAT, select this repository and grant read access to Contents.`
+          };
+          showError(
+            messages[repositoryResponse.status] ||
+              `GitHub returned ${repositoryResponse.status} ${repositoryResponse.statusText} while opening the repository.`
+          );
+          return;
+        }
+
+        const contentEndpoint = `${repositoryEndpoint}/contents/${repositoryPath}`;
+        const contentRequestOptions = getRequestOptions();
+        contentRequestOptions.headers.Accept = "application/vnd.github.raw+json";
+
+        let response;
+        try {
+          response = await fetch(contentEndpoint, contentRequestOptions);
+        } catch (error) {
+          showError(`The repository file could not be requested: ${error.message}`);
+          return;
+        }
+
+        if (!response.ok) {
+          const messages = {
+            401: "GitHub rejected the token while reading the repository file.",
+            403: "The token can open the repository but cannot read its contents. Grant it read access to Contents.",
             404: `The repository file ${repositoryPath} was not found.`
           };
           showError(
