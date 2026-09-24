@@ -81,11 +81,7 @@
       const repositoryName = "vacation_planning";
       const titleElement = document.getElementById("status-title");
       const messageElement = document.getElementById("status-message");
-      const requestedUrl = new URL(window.location.href);
-      const token = requestedUrl.searchParams.get("token");
-
-      requestedUrl.searchParams.delete("token");
-      window.history.replaceState(null, "", requestedUrl);
+      const token = new URLSearchParams(window.location.search).get("token");
 
       function showError(message) {
         document.title = "Unable to load vacation plan";
