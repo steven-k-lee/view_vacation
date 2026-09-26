@@ -81,7 +81,7 @@
       const repositoryName = "vacation_planning";
       const titleElement = document.getElementById("status-title");
       const messageElement = document.getElementById("status-message");
-      const token = new URLSearchParams(window.location.search).get("token");
+      const tokenStorageKey = "githubPat";
 
       function showError(message) {
         document.title = "Unable to load vacation plan";
@@ -103,7 +103,44 @@
         return `${pageName}/index.html`;
       }
 
-      function getRequestOptions() {
+      function getToken() {
+        const requestedUrl = new URL(window.location.href);
+
+        if (requestedUrl.searchParams.has("token")) {
+          const queryToken = requestedUrl.searchParams.get("token");
+
+          if (!queryToken) {
+            throw new Error("The token query string parameter cannot be empty.");
+          }
+
+          try {
+            window.sessionStorage.setItem(tokenStorageKey, queryToken);
+          } catch (error) {
+            throw new Error(`The token could not be saved for this session: ${error.message}`);
+          }
+
+          requestedUrl.searchParams.delete("token");
+          window.history.replaceState(null, "", requestedUrl);
+          return queryToken;
+        }
+
+        let storedToken;
+        try {
+          storedToken = window.sessionStorage.getItem(tokenStorageKey);
+        } catch (error) {
+          throw new Error(`The saved token could not be read: ${error.message}`);
+        }
+
+        if (!storedToken) {
+          throw new Error(
+            "A GitHub personal access token is required. Add it as ?token=YOUR_PAT to this page's URL."
+          );
+        }
+
+        return storedToken;
+      }
+
+      function getRequestOptions(token) {
         return {
           headers: {
             Accept: "application/vnd.github+json",
@@ -115,10 +152,11 @@
       }
 
       async function loadVacationPlan() {
-        if (!token) {
-          showError(
-            "A GitHub personal access token is required. Add it as ?token=YOUR_PAT to this page's URL."
-          );
+        let token;
+        try {
+          token = getToken();
+        } catch (error) {
+          showError(error.message);
           return;
         }
 
@@ -135,7 +173,7 @@
 
         let repositoryResponse;
         try {
-          repositoryResponse = await fetch(repositoryEndpoint, getRequestOptions());
+          repositoryResponse = await fetch(repositoryEndpoint, getRequestOptions(token));
         } catch (error) {
           showError(`GitHub could not be reached: ${error.message}`);
           return;
@@ -155,7 +193,7 @@
         }
 
         const contentEndpoint = `${repositoryEndpoint}/contents/${repositoryPath}`;
-        const contentRequestOptions = getRequestOptions();
+        const contentRequestOptions = getRequestOptions(token);
         contentRequestOptions.headers.Accept = "application/vnd.github.raw+json";
 
         let response;
