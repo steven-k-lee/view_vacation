@@ -113,25 +113,57 @@
             throw new Error("The token query string parameter cannot be empty.");
           }
 
+          let storageError;
           try {
-            window.sessionStorage.setItem(tokenStorageKey, queryToken);
+            window.localStorage.setItem(tokenStorageKey, queryToken);
           } catch (error) {
-            throw new Error(`The token could not be saved for this session: ${error.message}`);
+            storageError = error;
+            try {
+              window.sessionStorage.setItem(tokenStorageKey, queryToken);
+            } catch (sessionError) {
+              throw new Error(
+                `The token could not be saved: ${storageError.message}; ${sessionError.message}`
+              );
+            }
           }
 
           requestedUrl.searchParams.delete("token");
-          window.history.replaceState(null, "", requestedUrl);
+          window.history.replaceState(null, "", requestedUrl.href);
           return queryToken;
         }
 
         let storedToken;
+        let localStorageError;
         try {
-          storedToken = window.sessionStorage.getItem(tokenStorageKey);
+          storedToken = window.localStorage.getItem(tokenStorageKey);
         } catch (error) {
-          throw new Error(`The saved token could not be read: ${error.message}`);
+          localStorageError = error;
         }
 
         if (!storedToken) {
+          try {
+            storedToken = window.sessionStorage.getItem(tokenStorageKey);
+          } catch (error) {
+            const localMessage = localStorageError
+              ? `${localStorageError.message}; `
+              : "";
+            throw new Error(`The saved token could not be read: ${localMessage}${error.message}`);
+          }
+
+          if (storedToken && !localStorageError) {
+            try {
+              window.localStorage.setItem(tokenStorageKey, storedToken);
+            } catch (error) {
+              localStorageError = error;
+            }
+          }
+        }
+
+        if (!storedToken) {
+          if (localStorageError) {
+            throw new Error(`The saved token could not be read: ${localStorageError.message}`);
+          }
+
           throw new Error(
             "A GitHub personal access token is required. Add it as ?token=YOUR_PAT to this page's URL."
           );
